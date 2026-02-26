@@ -1,0 +1,19 @@
+{
+  "plugins": {
+    "supabase": {
+      "enabled": true
+    },
+    "sentry": {
+      "enabled": true
+    },
+    "prisma": {
+      "enabled": true
+    },
+    "cloudflare": {
+      "enabled": true
+    },
+    "vercel": {
+      "enabled": true
+    }
+  }
+}

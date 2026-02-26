@@ -1,0 +1,52 @@
+name: Check WebRTC Releases
+on:
+  schedule:
+    - cron: "0 12 * * 6"
+  workflow_dispatch:
+
+jobs:
+  check_releases:
+    runs-on: ubuntu-latest
+    steps:
+      - id: checkout_source
+        uses: actions/checkout@v3.3.0
+      - id: install_deps
+        run: npm ci
+      - id: get_webrtc_version
+        run: |
+          # Can't use the npm alias cause NPM writes output
+          WEBRTC_VERSION=$(node ./scripts/latest_release.mjs)
+          echo $WEBRTC_VERSION
+          echo version=$WEBRTC_VERSION >> $GITHUB_OUTPUT
+      - run: echo ${{ steps.get_webrtc_version.outputs.version }}
+      - id: get_latest_build
+        run: |
+          git fetch --all --tags
+          LATEST_TAG=$(git tag --sort=committerdate | tail -1)
+          echo $LATEST_TAG
+          echo release=$LATEST_TAG >> $GITHUB_OUTPUT
+      - run: echo ${{ steps.get_latest_build.outputs.release }}
+      - id: version_comparison
+        run: |
+          if [ -z "${{ steps.get_webrtc_version.outputs.version }}" ]
+          then
+            exit 1
+          fi
+
+          if [ -z "${{ steps.get_latest_build.outputs.release }}" ]
+          then
+            exit 1
+          fi
+
+          if [ "${{ steps.get_webrtc_version.outputs.version }}" = "${{ steps.get_latest_build.outputs.release }}" ]
+          then
+            echo should_build=false >> $GITHUB_OUTPUT
+          else
+            echo should_build=true >> $GITHUB_OUTPUT
+          fi
+      - uses: promiseofcake/circleci-trigger-action@v1.4
+        if: ${{ steps.version_comparison.outputs.should_build == 'true' }}
+        with:
+          user-token: ${{ secrets.CCI_TOKEN }}
+          project-slug: bengreenier/webrtc
+          branch: main
