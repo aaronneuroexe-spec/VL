@@ -3,9 +3,7 @@ import { useAuthStore } from '@/store/auth';
 import { useChannelStore } from '@/store/channels';
 import { useMessageStore } from '@/store/messages';
 import { useWebSocketStore } from '@/store/websocket';
-import { Message, PresenceUpdate, TypingIndicator, SignalingData } from '@/types';
-
-// Note: This service uses store.getState() to access store outside React components
+import { Message, PresenceUpdate, TypingIndicator } from '@/types';
 
 class WebSocketService {
   private socket: Socket | null = null;
@@ -15,30 +13,24 @@ class WebSocketService {
 
   connect(): void {
     const token = useAuthStore.getState().token;
-    if (!token) {
-      console.error('No auth token available for WebSocket connection');
-      return;
-    }
+    if (!token) return;
 
-    const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:4000';
-    
+    const wsUrl = import.meta.env.VITE_WS_URL || 'http://localhost:4000';
+
     this.socket = io(wsUrl, {
-      auth: {
-        token,
-      },
-      transports: ['websocket'],
-      upgrade: true,
-      rememberUpgrade: true,
+      auth: { token },
+      transports: ['polling', 'websocket'],
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionAttempts: this.maxReconnectAttempts,
     });
 
     this.setupEventListeners();
   }
 
   disconnect(): void {
-    if (this.socket) {
-      this.socket.disconnect();
-      this.socket = null;
-    }
+    this.socket?.disconnect();
+    this.socket = null;
     useWebSocketStore.getState().setConnected(false);
   }
 
@@ -46,166 +38,104 @@ class WebSocketService {
     if (!this.socket) return;
 
     this.socket.on('connect', () => {
-      console.log('WebSocket connected');
       useWebSocketStore.getState().setConnected(true);
       this.reconnectAttempts = 0;
     });
 
-    this.socket.on('disconnect', (reason) => {
-      console.log('WebSocket disconnected:', reason);
+    this.socket.on('disconnect', () => {
       useWebSocketStore.getState().setConnected(false);
-      
-      if (reason === 'io server disconnect') {
-        // Server disconnected, try to reconnect
-        this.handleReconnect();
-      }
     });
 
     this.socket.on('connect_error', (error: any) => {
-      console.error('WebSocket connection error:', error);
       useWebSocketStore.getState().setError(error?.message || 'Connection error');
-      this.handleReconnect();
     });
 
-    // Channel events
-    this.socket.on('channel_joined', (data) => {
-      console.log('Channel joined:', data);
+    // ─── Каналы ────────────────────────────────────────────────────────────
+    // Новые имена событий совпадают с бэкендом после рефакторинга
+
+    this.socket.on('channel:ready', (data: { channelId: string; messages: Message[]; members: any[] }) => {
+      useMessageStore.getState().setMessages(data.channelId, data.messages);
       useChannelStore.getState().updateChannel(data.channelId, {
         memberCount: data.members?.length || 0,
       });
     });
 
-    this.socket.on('channel_left', (data) => {
-      console.log('Channel left:', data);
+    this.socket.on('channel:member_joined', (data: { channelId: string; user: any }) => {
+      useChannelStore.getState().updateChannel(data.channelId, {
+        memberCount: (useChannelStore.getState().channels.find(c => c.id === data.channelId)?.memberCount ?? 0) + 1,
+      });
     });
 
-    // Message events
-    this.socket.on('message', (message: Message) => {
-      console.log('New message:', message);
+    this.socket.on('channel:member_left', (data: { channelId: string; userId: string }) => {
+      const current = useChannelStore.getState().channels.find(c => c.id === data.channelId)?.memberCount ?? 1;
+      useChannelStore.getState().updateChannel(data.channelId, {
+        memberCount: Math.max(0, current - 1),
+      });
+    });
+
+    // ─── Сообщения ─────────────────────────────────────────────────────────
+
+    this.socket.on('message:new', (message: Message) => {
       useMessageStore.getState().addMessage(message);
     });
 
-    this.socket.on('channel_messages', (data) => {
-      console.log('Channel messages:', data);
-      useMessageStore.getState().setMessages(data.channelId, data.messages);
+    // ─── Presence ──────────────────────────────────────────────────────────
+
+    this.socket.on('presence', (data: PresenceUpdate) => {
+      // TODO: обновить статус пользователя в store
     });
 
-    // Presence events
-    this.socket.on('presence_update', (data: PresenceUpdate) => {
-      console.log('Presence update:', data);
-      // Update user presence in store
-    });
+    // ─── Typing ────────────────────────────────────────────────────────────
 
-    // Typing events
     this.socket.on('typing', (data: TypingIndicator) => {
-      console.log('Typing indicator:', data);
       useMessageStore.getState().setTyping(data.channelId, data.userId, data.isTyping);
     });
 
-    // WebRTC signaling events
-    this.socket.on('signal', (data: SignalingData) => {
-      console.log('WebRTC signal:', data);
-      // Handle WebRTC signaling
-    });
+    // ─── Ошибки ────────────────────────────────────────────────────────────
 
-    this.socket.on('webrtc_offer', (data) => {
-      console.log('WebRTC offer:', data);
-      // Handle WebRTC offer
-    });
-
-    this.socket.on('webrtc_answer', (data) => {
-      console.log('WebRTC answer:', data);
-      // Handle WebRTC answer
-    });
-
-    this.socket.on('webrtc_ice', (data) => {
-      console.log('WebRTC ICE candidate:', data);
-      // Handle ICE candidate
-    });
-
-    // Error events
-    this.socket.on('error', (error) => {
-      console.error('WebSocket error:', error);
+    this.socket.on('error', (error: { message: string }) => {
       useWebSocketStore.getState().setError(error.message);
     });
   }
 
-  private handleReconnect(): void {
-    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.error('Max reconnection attempts reached');
-      useWebSocketStore.getState().setError('Connection failed after multiple attempts');
-      return;
-    }
+  // ─── Публичные методы ─────────────────────────────────────────────────────
 
-    this.reconnectAttempts++;
-    const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
-    
-    console.log(`Attempting to reconnect in ${delay}ms (attempt ${this.reconnectAttempts})`);
-    
-    setTimeout(() => {
-      this.connect();
-    }, delay);
-  }
-
-  // Channel methods
   joinChannel(channelId: string): void {
-    if (this.socket) {
-      this.socket.emit('join_channel', { channelId });
-    }
+    this.socket?.emit('channel:join', { channelId });
   }
 
   leaveChannel(channelId: string): void {
-    if (this.socket) {
-      this.socket.emit('leave_channel', { channelId });
-    }
+    this.socket?.emit('channel:leave', { channelId });
   }
 
-  // Message methods
   sendMessage(channelId: string, content: string, attachments?: any[], replyToId?: string): void {
-    if (this.socket) {
-      this.socket.emit('send_message', {
-        channelId,
-        content,
-        attachments,
-        replyToId,
-      });
-    }
+    this.socket?.emit('message:send', { channelId, content, attachments, replyToId });
   }
 
   setTyping(channelId: string, isTyping: boolean): void {
-    if (this.socket) {
-      this.socket.emit('typing', { channelId, isTyping });
-    }
+    this.socket?.emit(isTyping ? 'typing:start' : 'typing:stop', { channelId });
   }
 
-  // WebRTC methods
-  sendSignal(to: string, data: any): void {
-    if (this.socket) {
-      this.socket.emit('signal', { to, data });
-    }
+  // Guild presence
+  joinGuild(guildId: string): void {
+    this.socket?.emit('guild:join', { guildId });
   }
 
-  sendOffer(to: string, offer: RTCSessionDescriptionInit): void {
-    if (this.socket) {
-      this.socket.emit('webrtc_offer', { to, offer });
-    }
+  leaveGuild(guildId: string): void {
+    this.socket?.emit('guild:leave', { guildId });
   }
 
-  sendAnswer(to: string, answer: RTCSessionDescriptionInit): void {
-    if (this.socket) {
-      this.socket.emit('webrtc_answer', { to, answer });
-    }
+  // Voice presence — само аудио идёт через LiveKit, только уведомляем кто в канале
+  notifyVoiceJoined(channelId: string): void {
+    this.socket?.emit('voice:joined', { channelId });
   }
 
-  sendIceCandidate(to: string, candidate: RTCIceCandidateInit): void {
-    if (this.socket) {
-      this.socket.emit('webrtc_ice', { to, candidate });
-    }
+  notifyVoiceLeft(channelId: string): void {
+    this.socket?.emit('voice:left', { channelId });
   }
 
-  // Utility methods
   isConnected(): boolean {
-    return this.socket?.connected || false;
+    return this.socket?.connected ?? false;
   }
 
   getSocket(): Socket | null {
@@ -215,3 +145,5 @@ class WebSocketService {
 
 export const wsService = new WebSocketService();
 export default wsService;
+
+

@@ -32,6 +32,24 @@
     "react-intersection-observer": "^9.5.3",
     "workbox-window": "^7.0.0"
   },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.20.1",
+    "socket.io-client": "^4.7.4",
+    "axios": "^1.6.2",
+    "zustand": "^4.4.7",
+    "react-hook-form": "^7.48.2",
+    "react-hot-toast": "^2.4.1",
+    "lucide-react": "^0.294.0",
+    "clsx": "^2.0.0",
+    "tailwind-merge": "^2.0.0",
+    "@headlessui/react": "^1.7.17",
+    "date-fns": "^2.30.0",
+    "react-intersection-observer": "^9.5.3",
+    "workbox-window": "^7.0.0",
+    "livekit-client": "^2.11.0"
+  },
   "devDependencies": {
     "@types/react": "^18.2.37",
     "@types/react-dom": "^18.2.15",

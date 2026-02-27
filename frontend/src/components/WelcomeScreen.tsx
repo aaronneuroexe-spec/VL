@@ -1,63 +1,30 @@
-import { Mic, MessageSquare, Users, Calendar } from 'lucide-react';
+import { Hash, Mic, Users, Zap } from 'lucide-react';
 
 export function WelcomeScreen() {
   return (
-    <div className="flex items-center justify-center h-full">
-      <div className="max-w-2xl text-center">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">
-            Welcome to VoxLink
-          </h1>
-          <p className="text-xl text-gray-600">
-            Your modern voice communication platform for communities
-          </p>
+    <div className="flex-1 flex flex-col items-center justify-center bg-gray-700 text-center px-8">
+      <div className="mb-8">
+        <div className="w-20 h-20 bg-indigo-600/20 rounded-full flex items-center justify-center mx-auto mb-4">
+          <Zap size={36} className="text-indigo-400" />
         </div>
+        <h1 className="text-white text-2xl font-bold mb-2">Добро пожаловать в VoxLink</h1>
+        <p className="text-gray-400 text-sm max-w-sm">
+          Выбери канал в сайдбаре чтобы начать общение, или выбери гильдию слева.
+        </p>
+      </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          <div className="p-6 bg-white rounded-lg shadow-sm border border-gray-200">
-            <Mic className="w-8 h-8 text-primary-600 mb-4 mx-auto" />
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">
-              Voice Channels
-            </h3>
-            <p className="text-gray-600">
-              High-quality voice communication with WebRTC technology
-            </p>
+      <div className="grid grid-cols-3 gap-4 max-w-sm w-full">
+        {[
+          { icon: Hash, label: 'Текстовые каналы', desc: 'Общайся с командой' },
+          { icon: Mic,  label: 'Голосовые каналы', desc: 'LiveKit SFU' },
+          { icon: Users, label: 'Гильдии', desc: 'Твои сообщества' },
+        ].map(({ icon: Icon, label, desc }) => (
+          <div key={label} className="bg-gray-800/60 rounded-xl p-4 text-center">
+            <Icon size={20} className="text-indigo-400 mx-auto mb-2" />
+            <div className="text-white text-xs font-medium mb-1">{label}</div>
+            <div className="text-gray-500 text-xs">{desc}</div>
           </div>
-
-          <div className="p-6 bg-white rounded-lg shadow-sm border border-gray-200">
-            <MessageSquare className="w-8 h-8 text-primary-600 mb-4 mx-auto" />
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">
-              Text Chat
-            </h3>
-            <p className="text-gray-600">
-              Real-time messaging with file sharing and rich formatting
-            </p>
-          </div>
-
-          <div className="p-6 bg-white rounded-lg shadow-sm border border-gray-200">
-            <Users className="w-8 h-8 text-primary-600 mb-4 mx-auto" />
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">
-              Community
-            </h3>
-            <p className="text-gray-600">
-              Connect with your community members in organized channels
-            </p>
-          </div>
-
-          <div className="p-6 bg-white rounded-lg shadow-sm border border-gray-200">
-            <Calendar className="w-8 h-8 text-primary-600 mb-4 mx-auto" />
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">
-              Events
-            </h3>
-            <p className="text-gray-600">
-              Schedule and manage community events and activities
-            </p>
-          </div>
-        </div>
-
-        <div className="text-gray-500">
-          <p>Select a channel from the sidebar to start chatting</p>
-        </div>
+        ))}
       </div>
     </div>
   );

@@ -1,11 +1,17 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, OneToMany, JoinColumn } from 'typeorm';
+import {
+  Entity, PrimaryGeneratedColumn, Column,
+  CreateDateColumn, UpdateDateColumn,
+  ManyToOne, OneToMany, JoinColumn,
+} from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { Message } from '../../messages/entities/message.entity';
 import { Event } from '../../events/entities/event.entity';
+import { Guild } from '../../guilds/entities/guild.entity';
+import { ChannelCategory } from '../../guilds/entities/channel-category.entity';
 
 export enum ChannelType {
-  TEXT = 'text',
-  VOICE = 'voice',
+  TEXT   = 'text',
+  VOICE  = 'voice',
   STREAM = 'stream',
 }
 
@@ -17,11 +23,7 @@ export class Channel {
   @Column()
   name: string;
 
-  @Column({
-    type: 'enum',
-    enum: ChannelType,
-    default: ChannelType.TEXT,
-  })
+  @Column({ type: 'enum', enum: ChannelType, default: ChannelType.TEXT })
   type: ChannelType;
 
   @Column({ nullable: true })
@@ -33,14 +35,25 @@ export class Channel {
   @Column({ default: false })
   isPrivate: boolean;
 
+  /** Битовая маска прав доступа к каналу (переопределяет роли гильдии) */
   @Column({ type: 'jsonb', nullable: true })
-  permissions: any;
+  permissionOverwrites: Array<{
+    roleId: string;
+    allow: number;
+    deny: number;
+  }>;
 
-  @Column({ type: 'jsonb', nullable: true })
-  metadata: any;
+  @Column({ default: 0 })
+  position: number;
 
   @Column({ default: 0 })
   memberCount: number;
+
+  @Column({ nullable: true })
+  guildId: string;
+
+  @Column({ nullable: true })
+  categoryId: string;
 
   @Column({ nullable: true })
   createdById: string;
@@ -51,7 +64,16 @@ export class Channel {
   @UpdateDateColumn()
   updatedAt: Date;
 
-  // Relations
+  // ─── Relations ─────────────────────────────────────────────────────────
+
+  @ManyToOne(() => Guild, { nullable: true, onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'guildId' })
+  guild: Guild;
+
+  @ManyToOne(() => ChannelCategory, category => category.channels, { nullable: true })
+  @JoinColumn({ name: 'categoryId' })
+  category: ChannelCategory;
+
   @ManyToOne(() => User, user => user.createdChannels)
   @JoinColumn({ name: 'createdById' })
   createdBy: User;

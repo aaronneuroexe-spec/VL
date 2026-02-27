@@ -1,13 +1,19 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsOptional } from 'class-validator';
+import { IsString, IsOptional, IsEmail } from 'class-validator';
 
 export class LoginDto {
-  @ApiProperty({ description: 'Invite token or magic link token' })
-  @IsString()
-  token: string;
-
-  @ApiProperty({ description: 'Username for the user', required: false })
+  @ApiProperty({ description: 'Username', required: false })
   @IsOptional()
   @IsString()
   username?: string;
+
+  @ApiProperty({ description: 'Email', required: false })
+  @IsOptional()
+  @IsEmail()
+  email?: string;
+
+  @ApiProperty({ description: 'Invite token', required: false })
+  @IsOptional()
+  @IsString()
+  inviteToken?: string;
 }

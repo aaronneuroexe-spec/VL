@@ -1,5 +1,4 @@
 version: '3.8'
-
 services:
   # Database
   db:
@@ -21,7 +20,6 @@ services:
       retries: 3
     networks:
       - voxlink-network
-
   # Redis
   redis:
     image: redis:7-alpine
@@ -38,7 +36,6 @@ services:
       retries: 3
     networks:
       - voxlink-network
-
   # Backend API
   backend:
     build: 
@@ -80,7 +77,6 @@ services:
       retries: 3
     networks:
       - voxlink-network
-
   # Frontend
   frontend:
     build:
@@ -96,7 +92,6 @@ services:
       - backend
     networks:
       - voxlink-network
-
   # TURN Server (coturn)
   coturn:
     image: instrumentisto/coturn:latest
@@ -111,11 +106,20 @@ services:
       - "3478:3478/udp"
       - "5349:5349"
       - "5349:5349/udp"
-      - "49152-65535:49152-65535/udp"
+      - "52300-52900:52300-52900/udp"
     command: ["-c", "/etc/coturn/turnserver.conf"]
     networks:
       - voxlink-network
-
+  # LiveKit SFU
+  livekit:
+    image: livekit/livekit-server:latest
+    container_name: voxlink-livekit
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+    command: --dev --bind 0.0.0.0
+    networks:
+      - voxlink-network
   # Nginx (Reverse Proxy)
   nginx:
     image: nginx:alpine
@@ -131,11 +135,9 @@ services:
       - backend
     networks:
       - voxlink-network
-
 volumes:
   db-data:
   redis-data:
-
 networks:
   voxlink-network:
     driver: bridge

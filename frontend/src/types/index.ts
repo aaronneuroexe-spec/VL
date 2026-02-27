@@ -1,4 +1,5 @@
-// User types
+// ─── User ──────────────────────────────────────────────────────────────────
+
 export interface User {
   id: string;
   username: string;
@@ -7,13 +8,64 @@ export interface User {
   role: 'admin' | 'moderator' | 'member' | 'banned';
   status: 'online' | 'away' | 'busy' | 'offline';
   lastSeen?: Date;
-  preferences?: Record<string, any>;
-  metadata?: Record<string, any>;
   createdAt: Date;
   updatedAt: Date;
 }
 
-// Channel types
+// ─── Guild ─────────────────────────────────────────────────────────────────
+
+export interface Guild {
+  id: string;
+  name: string;
+  description?: string;
+  icon?: string;
+  banner?: string;
+  inviteCode?: string;
+  isPublic: boolean;
+  requiresApproval: boolean;
+  ownerId: string;
+  owner?: User;
+  members?: GuildMember[];
+  roles?: GuildRole[];
+  categories?: ChannelCategory[];
+  createdAt: Date;
+}
+
+export interface GuildRole {
+  id: string;
+  name: string;
+  color: string;
+  permissions: number;
+  position: number;
+  isHoisted: boolean;
+  isManaged: boolean;
+  guildId: string;
+}
+
+export interface GuildMember {
+  id: string;
+  nickname?: string;
+  status: 'active' | 'pending' | 'banned';
+  isMuted: boolean;
+  isDeafened: boolean;
+  userId: string;
+  guildId: string;
+  joinedAt: Date;
+  user: User;
+  roles: GuildRole[];
+}
+
+export interface ChannelCategory {
+  id: string;
+  name: string;
+  position: number;
+  isPrivate: boolean;
+  guildId: string;
+  channels: Channel[];
+}
+
+// ─── Channel ───────────────────────────────────────────────────────────────
+
 export interface Channel {
   id: string;
   name: string;
@@ -21,22 +73,23 @@ export interface Channel {
   topic?: string;
   description?: string;
   isPrivate: boolean;
-  permissions?: Record<string, any>;
-  metadata?: Record<string, any>;
+  position: number;
   memberCount: number;
-  createdBy?: User;
+  guildId?: string;
+  categoryId?: string;
+  category?: ChannelCategory;
   createdAt: Date;
   updatedAt: Date;
 }
 
-// Message types
+// ─── Message ───────────────────────────────────────────────────────────────
+
 export interface Message {
   id: string;
   channelId: string;
   authorId: string;
   content?: string;
   attachments?: Attachment[];
-  metadata?: Record<string, any>;
   replyToId?: string;
   replyTo?: Message;
   editedAt?: Date;
@@ -54,27 +107,7 @@ export interface Attachment {
   size: number;
 }
 
-// Event types
-export interface Event {
-  id: string;
-  title: string;
-  description?: string;
-  startsAt: Date;
-  endsAt?: Date;
-  metadata?: Record<string, any>;
-  isRecurring: boolean;
-  channelId?: string;
-  channel?: Channel;
-  createdBy: User;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-// WebSocket types
-export interface WebSocketMessage {
-  type: string;
-  data: any;
-}
+// ─── WebSocket ─────────────────────────────────────────────────────────────
 
 export interface PresenceUpdate {
   userId: string;
@@ -89,30 +122,12 @@ export interface TypingIndicator {
   isTyping: boolean;
 }
 
-// WebRTC types
-export interface WebRTCConfig {
-  rtcConfiguration: RTCConfiguration;
-  turnServers: TURNServer[];
-  stunServers: RTCIceServer[];
-}
+// ─── Auth ──────────────────────────────────────────────────────────────────
 
-export interface TURNServer {
-  urls: string[];
-  username: string;
-  credential: string;
-}
-
-export interface SignalingData {
-  from: string;
-  to: string;
-  type: 'offer' | 'answer' | 'ice-candidate';
-  data: any;
-}
-
-// Auth types
 export interface LoginRequest {
-  token: string;
   username?: string;
+  email?: string;
+  inviteToken?: string;
 }
 
 export interface LoginResponse {
@@ -124,31 +139,27 @@ export interface CreateInviteRequest {
   channelId?: string;
   role?: string;
   expiresInHours?: number;
+  maxUses?: number;
 }
 
 export interface CreateInviteResponse {
   inviteToken: string;
+  inviteUrl: string;
   expiresAt: Date;
   channelId?: string;
   role: string;
 }
 
-// API Response types
+// ─── API ───────────────────────────────────────────────────────────────────
+
 export interface ApiResponse<T = any> {
   data?: T;
   message?: string;
   error?: string;
 }
 
-export interface PaginatedResponse<T> {
-  data: T[];
-  total: number;
-  page: number;
-  limit: number;
-  hasMore: boolean;
-}
+// ─── Store ─────────────────────────────────────────────────────────────────
 
-// Store types
 export interface AuthState {
   user: User | null;
   token: string | null;
@@ -156,52 +167,8 @@ export interface AuthState {
   isLoading: boolean;
 }
 
-export interface ChannelState {
-  channels: Channel[];
-  currentChannel: Channel | null;
-  isLoading: boolean;
-}
-
-export interface MessageState {
-  messages: Record<string, Message[]>;
-  isLoading: boolean;
-  hasMore: Record<string, boolean>;
-}
-
 export interface WebSocketState {
   isConnected: boolean;
   isConnecting: boolean;
   error: string | null;
-}
-
-export interface WebRTCState {
-  isConnected: boolean;
-  isConnecting: boolean;
-  localStream: MediaStream | null;
-  remoteStreams: Record<string, MediaStream>;
-  connections: Record<string, RTCPeerConnection>;
-}
-
-// Component props types
-export interface ChannelListProps {
-  channels: Channel[];
-  currentChannel?: Channel | null;
-  onChannelSelect: (channel: Channel) => void;
-}
-
-export interface MessageListProps {
-  messages: Message[];
-  isLoading: boolean;
-  hasMore: boolean;
-  onLoadMore: () => void;
-}
-
-export interface VoicePanelProps {
-  channel: Channel;
-  isConnected: boolean;
-  isMuted: boolean;
-  isDeafened: boolean;
-  onMuteToggle: () => void;
-  onDeafenToggle: () => void;
-  onDisconnect: () => void;
 }

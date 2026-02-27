@@ -60,18 +60,18 @@ export function ChatWindow({ channel }: ChatWindowProps) {
   };
 
   return (
-    <div className="flex flex-col h-full bg-white">
+    <div className="flex flex-col h-full bg-gray-800">
       {/* Channel header */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-200">
+      <div className="flex items-center justify-between p-4 border-b border-gray-700">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">
+          <h2 className="text-lg font-semibold text-white">
             #{channel.name}
           </h2>
           {channel.topic && (
-            <p className="text-sm text-gray-600">{channel.topic}</p>
+            <p className="text-sm text-gray-400">{channel.topic}</p>
           )}
         </div>
-        <div className="flex items-center space-x-2 text-sm text-gray-500">
+        <div className="flex items-center space-x-2 text-sm text-gray-400">
           <span>{channel.memberCount} members</span>
         </div>
       </div>
@@ -87,7 +87,7 @@ export function ChatWindow({ channel }: ChatWindowProps) {
 
       {/* Typing indicators */}
       {channelTyping.size > 0 && (
-        <div className="px-4 py-2 text-sm text-gray-500 border-t border-gray-100">
+        <div className="px-4 py-2 text-sm text-gray-400 border-t border-gray-700">
           <div className="flex items-center space-x-1">
             <span>
               {Array.from(channelTyping).map((userId, index) => (
@@ -103,7 +103,7 @@ export function ChatWindow({ channel }: ChatWindowProps) {
       )}
 
       {/* Message input */}
-      <div className="p-4 border-t border-gray-200">
+      <div className="p-4 border-t border-gray-700">
         <MessageInput
           value={message}
           onChange={handleTyping}
@@ -116,3 +116,4 @@ export function ChatWindow({ channel }: ChatWindowProps) {
     </div>
   );
 }
+

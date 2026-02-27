@@ -46,7 +46,7 @@ export function useWebSocket() {
     }
 
     return () => {
-      disconnect();
+      wsService.disconnect();
     };
   }, [isAuthenticated, token, connect, disconnect]);
 
@@ -104,3 +104,4 @@ export function useWebSocket() {
     clearError,
   };
 }
+

@@ -1,0 +1,18 @@
+# replacements.txt for git-filter-repo --replace-text
+# IMPORTANT: Replace the right-hand side values as needed.
+# Format: exact-secret==>REPLACEMENT
+# Example:
+# mySuperSecretValue==>REDACTED_JWT_SECRET
+
+# Common placeholders and example secrets from this repo — replace these with real secrets before running
+my_super_secret_key_123456==>REDACTED_JWT_SECRET
+devkey==>REDACTED_LIVEKIT_KEY
+devsecret==>REDACTED_LIVEKIT_SECRET
+password==>REDACTED_DB_PASSWORD
+your_app_password==>REDACTED_SMTP_PASS
+turnpass==>REDACTED_TURN_PASS
+your_email@gmail.com==>REDACTED_SMTP_USER
+
+# Add any other exact secret strings you want to replace in history below
+# e.g.
+# <PASTE_REAL_SECRET_HERE>==>REDACTED_WHATEVER

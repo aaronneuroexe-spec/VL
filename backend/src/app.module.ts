@@ -13,37 +13,26 @@ import { MediaModule } from './media/media.module';
 import { EventsModule } from './events/events.module';
 import { AdminModule } from './admin/admin.module';
 import { MonitoringModule } from './monitoring/monitoring.module';
+import { GuildsModule } from './guilds/guilds.module';
+import { LivekitModule } from './livekit/livekit.module';
 import { DatabaseConfig } from './config/database.config';
 import { RedisConfig } from './config/redis.config';
 
 @Module({
   imports: [
-    // Configuration
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: ['.env.local', '.env'],
     }),
-
-    // Database
-    TypeOrmModule.forRootAsync({
-      useClass: DatabaseConfig,
-    }),
-
-    // Redis
+    TypeOrmModule.forRootAsync({ useClass: DatabaseConfig }),
     RedisConfig,
-
-    // Event emitter (for plugins, etc.)
     EventEmitterModule.forRoot(),
-
-    // Rate limiting
-    ThrottlerModule.forRoot([{
-      ttl: 60000, // 1 minute
-      limit: 100, // 100 requests per minute
-    }]),
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
 
     // Feature modules
     AuthModule,
     UsersModule,
+    GuildsModule,
     ChannelsModule,
     MessagesModule,
     WebsocketModule,
@@ -52,6 +41,7 @@ import { RedisConfig } from './config/redis.config';
     EventsModule,
     AdminModule,
     MonitoringModule,
+    LivekitModule,
   ],
 })
 export class AppModule {}

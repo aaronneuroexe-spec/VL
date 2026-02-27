@@ -1,236 +1,104 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { webrtcService } from '@/services/webrtc';
-import { wsService } from '@/services/websocket';
-import { WebRTCConfig } from '@/types';
+import { useState, useEffect, useCallback } from 'react';
+import { ConnectionState } from 'livekit-client';
+import { livekitService, VoiceParticipant } from '@/services/livekit';
+import { apiService } from '@/services/api';
 
-interface UsePeerConnectionOptions {
+interface UseVoiceOptions {
   channelId: string;
   autoConnect?: boolean;
 }
 
-interface UsePeerConnectionReturn {
+interface UseVoiceReturn {
+  participants: VoiceParticipant[];
+  connectionState: ConnectionState;
   isConnected: boolean;
   isConnecting: boolean;
-  localStream: MediaStream | null;
-  remoteStreams: Map<string, MediaStream>;
-  isAudioMuted: boolean;
-  isVideoMuted: boolean;
-  config: WebRTCConfig | null;
+  isMuted: boolean;
+  isDeafened: boolean;
+  isSharingScreen: boolean;
   error: string | null;
   connect: () => Promise<void>;
-  disconnect: () => void;
-  toggleAudio: () => void;
-  toggleVideo: () => void;
-  getStats: (userId: string) => Promise<RTCStatsReport | null>;
+  disconnect: () => Promise<void>;
+  toggleMute: () => void;
+  toggleDeafen: () => void;
+  toggleScreenShare: () => Promise<void>;
 }
 
-export function usePeerConnection({
-  channelId,
-  autoConnect = false,
-}: UsePeerConnectionOptions): UsePeerConnectionReturn {
-  const [isConnected, setIsConnected] = useState(false);
-  const [isConnecting, setIsConnecting] = useState(false);
-  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
-  const [remoteStreams, setRemoteStreams] = useState<Map<string, MediaStream>>(new Map());
-  const [isAudioMuted, setIsAudioMuted] = useState(false);
-  const [isVideoMuted, setIsVideoMuted] = useState(false);
-  const [config, setConfig] = useState<WebRTCConfig | null>(null);
+export function usePeerConnection({ channelId, autoConnect = false }: UseVoiceOptions): UseVoiceReturn {
+  const [participants, setParticipants] = useState<VoiceParticipant[]>([]);
+  const [connectionState, setConnectionState] = useState<ConnectionState>(ConnectionState.Disconnected);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isDeafened, setIsDeafened] = useState(false);
+  const [isSharingScreen, setIsSharingScreen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const isInitialized = useRef(false);
+  const isConnected = connectionState === ConnectionState.Connected;
+  const isConnecting = connectionState === ConnectionState.Connecting;
 
-  const initialize = useCallback(async () => {
-    if (isInitialized.current) return;
-
-    try {
-      setError(null);
-      const webrtcConfig = await webrtcService.initialize();
-      setConfig(webrtcConfig);
-      isInitialized.current = true;
-    } catch (err: any) {
-      setError(err.message);
-      console.error('Failed to initialize WebRTC:', err);
-    }
+  useEffect(() => {
+    livekitService.onParticipants(setParticipants);
+    livekitService.onState(setConnectionState);
   }, []);
 
   const connect = useCallback(async () => {
-    if (!isInitialized.current) {
-      await initialize();
-    }
-
     if (isConnecting || isConnected) return;
-
     try {
-      setIsConnecting(true);
       setError(null);
-
-      // Get user media
-      const stream = await webrtcService.getUserMedia({
-        audio: true,
-        video: false, // Start with audio only
-      });
-
-      setLocalStream(stream);
-      setIsAudioMuted(false);
-      setIsVideoMuted(true);
-
-      // Join the channel
-      await webrtcService.joinChannel(channelId);
-
-      setIsConnected(true);
+      // apiService.post возвращает данные напрямую, без обёртки { data }
+      const response = await apiService.post<{ token: string; url: string }>('/livekit/token', { channelId });
+      if (!response || !response.token) throw new Error('Failed to get token');
+      await livekitService.connect(response.url, response.token);
     } catch (err: any) {
-      setError(err.message);
-      console.error('Failed to connect to voice channel:', err);
-    } finally {
-      setIsConnecting(false);
+      setError(err.message ?? 'Failed to connect');
     }
-  }, [isConnecting, isConnected, channelId, initialize]);
+  }, [channelId, isConnecting, isConnected]);
 
-  const disconnect = useCallback(() => {
-    webrtcService.cleanupAll();
-    setLocalStream(null);
-    setRemoteStreams(new Map());
-    setIsConnected(false);
-    setIsConnecting(false);
-    setIsAudioMuted(false);
-    setIsVideoMuted(false);
+  const disconnect = useCallback(async () => {
+    await livekitService.disconnect();
+    setIsMuted(false);
+    setIsDeafened(false);
+    setIsSharingScreen(false);
   }, []);
 
-  const toggleAudio = useCallback(() => {
-    if (isAudioMuted) {
-      webrtcService.unmuteAudio();
-      setIsAudioMuted(false);
-    } else {
-      webrtcService.muteAudio();
-      setIsAudioMuted(true);
-    }
-  }, [isAudioMuted]);
+  const toggleMute = useCallback(() => {
+    const next = !isMuted;
+    livekitService.setMicEnabled(!next);
+    setIsMuted(next);
+  }, [isMuted]);
 
-  const toggleVideo = useCallback(() => {
-    if (isVideoMuted) {
-      webrtcService.unmuteVideo();
-      setIsVideoMuted(false);
-    } else {
-      webrtcService.muteVideo();
-      setIsVideoMuted(true);
-    }
-  }, [isVideoMuted]);
+  const toggleDeafen = useCallback(() => {
+    const next = !isDeafened;
+    livekitService.setDeafened(next);
+    setIsDeafened(next);
+    if (next) livekitService.setMicEnabled(false);
+    else livekitService.setMicEnabled(true);
+    setIsMuted(next);
+  }, [isDeafened]);
 
-  const getStats = useCallback(async (userId: string) => {
-    return webrtcService.getStats(userId);
-  }, []);
+  const toggleScreenShare = useCallback(async () => {
+    const next = !isSharingScreen;
+    await livekitService.setScreenShareEnabled(next);
+    setIsSharingScreen(next);
+  }, [isSharingScreen]);
 
-  // Handle WebRTC signaling events
   useEffect(() => {
-    const handleOffer = async (event: CustomEvent) => {
-      const { from, offer } = event.detail;
-      try {
-        await webrtcService.handleOffer(from, offer);
-      } catch (err: any) {
-        console.error('Failed to handle offer:', err);
-        setError(err.message);
-      }
-    };
-
-    const handleAnswer = async (event: CustomEvent) => {
-      const { from, answer } = event.detail;
-      try {
-        await webrtcService.handleAnswer(from, answer);
-      } catch (err: any) {
-        console.error('Failed to handle answer:', err);
-        setError(err.message);
-      }
-    };
-
-    const handleIceCandidate = async (event: CustomEvent) => {
-      const { from, candidate } = event.detail;
-      try {
-        await webrtcService.handleIceCandidate(from, candidate);
-      } catch (err: any) {
-        console.error('Failed to handle ICE candidate:', err);
-        setError(err.message);
-      }
-    };
-
-    const handleRemoteStream = (event: CustomEvent) => {
-      const { userId, stream } = event.detail;
-      setRemoteStreams(prev => new Map(prev).set(userId, stream));
-    };
-
-    const handlePeerConnected = (event: CustomEvent) => {
-      const { userId } = event.detail;
-      console.log('Peer connected:', userId);
-    };
-
-    const handlePeerDisconnected = (event: CustomEvent) => {
-      const { userId } = event.detail;
-      setRemoteStreams(prev => {
-        const newStreams = new Map(prev);
-        newStreams.delete(userId);
-        return newStreams;
-      });
-    };
-
-    // Listen to WebSocket signaling events
-    const socket = wsService.getSocket();
-    if (socket) {
-      socket.on('webrtc_offer', handleOffer);
-      socket.on('webrtc_answer', handleAnswer);
-      socket.on('webrtc_ice', handleIceCandidate);
-    }
-
-    // Listen to WebRTC events
-    window.addEventListener('remoteStream', handleRemoteStream as EventListener);
-    window.addEventListener('peerConnected', handlePeerConnected as EventListener);
-    window.addEventListener('peerDisconnected', handlePeerDisconnected as EventListener);
-
-    return () => {
-      if (socket) {
-        socket.off('webrtc_offer', handleOffer);
-        socket.off('webrtc_answer', handleAnswer);
-        socket.off('webrtc_ice', handleIceCandidate);
-      }
-
-      window.removeEventListener('remoteStream', handleRemoteStream as EventListener);
-      window.removeEventListener('peerConnected', handlePeerConnected as EventListener);
-      window.removeEventListener('peerDisconnected', handlePeerDisconnected as EventListener);
-    };
-  }, []);
-
-  // Auto-connect if enabled
-  useEffect(() => {
-    if (autoConnect && channelId) {
-      connect();
-    }
-
-    return () => {
-      if (channelId) {
-        disconnect();
-      }
-    };
-  }, [autoConnect, channelId, connect, disconnect]);
-
-  // Update mute states based on stream
-  useEffect(() => {
-    if (localStream) {
-      setIsAudioMuted(webrtcService.isAudioMuted());
-      setIsVideoMuted(webrtcService.isVideoMuted());
-    }
-  }, [localStream]);
+    if (autoConnect && channelId) connect();
+    return () => { disconnect(); };
+  }, [autoConnect, channelId]);
 
   return {
+    participants,
+    connectionState,
     isConnected,
     isConnecting,
-    localStream,
-    remoteStreams,
-    isAudioMuted,
-    isVideoMuted,
-    config,
+    isMuted,
+    isDeafened,
+    isSharingScreen,
     error,
     connect,
     disconnect,
-    toggleAudio,
-    toggleVideo,
-    getStats,
-  };
+    toggleMute,
+    toggleDeafen,
+    toggleScreenShare,
+  } as any;
 }

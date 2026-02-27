@@ -34,13 +34,17 @@ export function useAuth() {
       setLoading(true);
       clearError();
 
-      // Регистрация сразу возвращает токен и пользователя
+      // Создаём пользователя (публичный эндпоинт не требует токена)
+      await apiService.post('/auth/register', { username, email, password });
+
+      // После регистрации сразу входим
       const response = await apiService.post<{ access_token: string; user: any }>(
-        '/auth/register',
-        { username, email, password },
+        '/auth/login',
+        { username },
       );
 
       login(response.user, response.access_token);
+      wsService.connect();
       return response;
     } catch (err: any) {
       const msg = err?.response?.data?.message || err?.message || 'Registration failed';
@@ -64,6 +68,7 @@ export function useAuth() {
       );
 
       login(response.user, response.access_token);
+      wsService.connect();
       return response;
     } catch (err: any) {
       const msg = err?.response?.data?.message || err?.message || 'Login failed';
@@ -102,6 +107,7 @@ export function useAuth() {
       );
 
       login(response.user, response.access_token);
+      wsService.connect();
       return response;
     } catch (err: any) {
       const msg = err?.response?.data?.message || err?.message || 'Invalid or expired link';
