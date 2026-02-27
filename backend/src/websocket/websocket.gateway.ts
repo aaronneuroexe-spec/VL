@@ -8,6 +8,7 @@ import {
   OnGatewayDisconnect,
   OnGatewayInit,
 } from '@nestjs/websockets';
+import { ConfigService } from '@nestjs/config';
 import { Logger } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
@@ -22,12 +23,7 @@ interface AuthenticatedSocket extends Socket {
 }
 
 @WebSocketGateway({
-  // CORS for socket.io — use permissive default here; HTTP CORS is configured in main.ts via ConfigService
-  cors: {
-    origin: '*',
-    credentials: true,
-    methods: ['GET', 'POST'],
-  },
+  // CORS will be configured at runtime in afterInit using ConfigService to avoid process.env usage in decorators
   transports: ['polling', 'websocket'],
   namespace: '/',
 })
@@ -45,10 +41,43 @@ export class WebsocketGateway
     private messagesService: MessagesService,
     private channelsService: ChannelsService,
     private usersService: UsersService,
+    private configService: ConfigService,
   ) {}
 
-  afterInit() {
-    this.logger.log('WebSocket Gateway initialized');
+  afterInit(server: Server) {
+    try {
+      const frontendUrl = this.configService.get<string>('FRONTEND_URL');
+      const nodeEnv = this.configService.get<string>('NODE_ENV', 'development');
+
+      let origin = frontendUrl;
+      if (!origin && nodeEnv !== 'production') {
+        origin = 'http://localhost:3000';
+      }
+
+      const corsOptions = {
+        origin,
+        credentials: true,
+        methods: ['GET', 'POST'],
+      };
+
+      // Apply to engine.io options if present
+      // (engine.opts.cors) or socket.io server opts (server.opts.cors)
+      try {
+        if ((server as any).engine && (server as any).engine.opts) {
+          (server as any).engine.opts.cors = { ...(server as any).engine.opts.cors, ...corsOptions };
+        }
+      } catch {}
+
+      try {
+        if ((server as any).opts) {
+          (server as any).opts.cors = { ...(server as any).opts.cors, ...corsOptions };
+        }
+      } catch {}
+
+      this.logger.log('WebSocket Gateway initialized');
+    } catch (e) {
+      this.logger.error('Failed to configure WebSocket CORS', e as any);
+    }
   }
 
   // ─── Подключение / отключение ────────────────────────────────────────────
