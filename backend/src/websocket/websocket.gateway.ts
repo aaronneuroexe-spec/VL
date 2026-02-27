@@ -8,7 +8,7 @@ import {
   OnGatewayDisconnect,
   OnGatewayInit,
 } from '@nestjs/websockets';
-import { Logger, UseGuards } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
 import { WebsocketService } from './websocket.service';
@@ -22,10 +22,13 @@ interface AuthenticatedSocket extends Socket {
 }
 
 @WebSocketGateway({
+  // CORS for socket.io — use permissive default here; HTTP CORS is configured in main.ts via ConfigService
   cors: {
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin: '*',
     credentials: true,
+    methods: ['GET', 'POST'],
   },
+  transports: ['polling', 'websocket'],
   namespace: '/',
 })
 export class WebsocketGateway
@@ -44,47 +47,38 @@ export class WebsocketGateway
     private usersService: UsersService,
   ) {}
 
-  afterInit(server: Server) {
+  afterInit() {
     this.logger.log('WebSocket Gateway initialized');
   }
 
+  // ─── Подключение / отключение ────────────────────────────────────────────
+
   async handleConnection(client: AuthenticatedSocket) {
     try {
-      // Authenticate user from JWT token
-      const token = client.handshake.auth.token || client.handshake.headers.authorization?.replace('Bearer ', '');
-      
+      const token =
+        client.handshake.auth?.token ||
+        client.handshake.headers.authorization?.replace('Bearer ', '');
+
       if (!token) {
-        this.logger.warn('Connection rejected: No token provided');
         client.disconnect();
         return;
       }
 
       const payload = this.jwtService.verify(token);
       const user = await this.usersService.findById(payload.sub);
-      
+
       if (!user) {
-        this.logger.warn('Connection rejected: Invalid user');
         client.disconnect();
         return;
       }
 
       client.user = user;
       await this.usersService.updateStatus(user.id, 'online');
-      
-      this.logger.log(`User ${user.username} connected`);
-      
-      // Join user to their personal room
-      await client.join(`user_${user.id}`);
-      
-      // Notify about user presence
-      this.server.emit('presence_update', {
-        userId: user.id,
-        username: user.username,
-        status: 'online',
-      });
+      await client.join(`user:${user.id}`);
 
-    } catch (error) {
-      this.logger.error('Connection error:', error);
+      this.server.emit('presence', { userId: user.id, status: 'online' });
+      this.logger.log(`${user.username} connected`);
+    } catch {
       client.disconnect();
     }
   }
@@ -92,197 +86,159 @@ export class WebsocketGateway
   async handleDisconnect(client: AuthenticatedSocket) {
     if (client.user) {
       await this.usersService.updateStatus(client.user.id, 'offline');
-      
-      this.logger.log(`User ${client.user.username} disconnected`);
-      
-      // Notify about user presence
-      this.server.emit('presence_update', {
-        userId: client.user.id,
-        username: client.user.username,
-        status: 'offline',
-      });
+      this.server.emit('presence', { userId: client.user.id, status: 'offline' });
+      this.logger.log(`${client.user.username} disconnected`);
     }
   }
 
-  @SubscribeMessage('join_channel')
+  // ─── Каналы ───────────────────────────────────────────────────────────────
+
+  @SubscribeMessage('channel:join')
   async handleJoinChannel(
-    @MessageBody() data: { channelId: string; token: string },
+    @MessageBody() data: { channelId: string },
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
-    try {
-      if (!client.user) {
-        client.emit('error', { message: 'Not authenticated' });
-        return;
-      }
+    if (!client.user) return;
 
+    try {
       const channel = await this.channelsService.findOne(data.channelId, client.user);
-      
-      // Join the channel room
-      await client.join(`channel_${data.channelId}`);
-      
-      // Get channel members
+      await client.join(`channel:${data.channelId}`);
+
       const members = await this.websocketService.getChannelMembers(data.channelId);
-      
-      // Notify channel about new member
-      this.server.to(`channel_${data.channelId}`).emit('channel_joined', {
+      const messages = await this.messagesService.findAll(data.channelId, client.user, 50);
+
+      this.server.to(`channel:${data.channelId}`).emit('channel:member_joined', {
         channelId: data.channelId,
-        user: {
-          id: client.user.id,
-          username: client.user.username,
-          avatar: client.user.avatar,
-        },
+        user: { id: client.user.id, username: client.user.username, avatar: client.user.avatar },
+      });
+
+      client.emit('channel:ready', {
+        channelId: data.channelId,
+        messages: messages.reverse(),
         members,
       });
-
-      // Send recent messages to the new member
-      const messages = await this.messagesService.findAll(data.channelId, client.user, 50);
-      client.emit('channel_messages', {
-        channelId: data.channelId,
-        messages: messages.reverse(), // Send in chronological order
-      });
-
-    } catch (error) {
-      client.emit('error', { message: error?.message || 'Unknown error' });
+    } catch (e) {
+      client.emit('error', { message: e?.message });
     }
   }
 
-  @SubscribeMessage('leave_channel')
+  @SubscribeMessage('channel:leave')
   async handleLeaveChannel(
     @MessageBody() data: { channelId: string },
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
-    if (!client.user) {
-      client.emit('error', { message: 'Not authenticated' });
-      return;
-    }
-
-    await client.leave(`channel_${data.channelId}`);
-    
-    // Notify channel about member leaving
-    this.server.to(`channel_${data.channelId}`).emit('channel_left', {
+    if (!client.user) return;
+    await client.leave(`channel:${data.channelId}`);
+    this.server.to(`channel:${data.channelId}`).emit('channel:member_left', {
       channelId: data.channelId,
       userId: client.user.id,
-      username: client.user.username,
     });
   }
 
-  @SubscribeMessage('send_message')
+  // ─── Сообщения ────────────────────────────────────────────────────────────
+
+  @SubscribeMessage('message:send')
   async handleSendMessage(
     @MessageBody() data: { channelId: string; content: string; attachments?: any[]; replyToId?: string },
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
+    if (!client.user) return;
+
     try {
-      if (!client.user) {
-        client.emit('error', { message: 'Not authenticated' });
-        return;
-      }
+      const message = await this.messagesService.create(
+        { content: data.content, attachments: data.attachments, replyToId: data.replyToId },
+        client.user,
+        data.channelId,
+      );
 
-      const message = await this.messagesService.create({
-        content: data.content,
-        attachments: data.attachments,
-        replyToId: data.replyToId,
-      }, client.user, data.channelId);
-
-      // Broadcast message to channel
-      this.server.to(`channel_${data.channelId}`).emit('message', {
+      this.server.to(`channel:${data.channelId}`).emit('message:new', {
         id: message.id,
         channelId: data.channelId,
         content: message.content,
         attachments: message.attachments,
         replyToId: message.replyToId,
-        author: {
-          id: client.user.id,
-          username: client.user.username,
-          avatar: client.user.avatar,
-        },
+        author: { id: client.user.id, username: client.user.username, avatar: client.user.avatar },
         createdAt: message.createdAt,
       });
-
-    } catch (error) {
-      client.emit('error', { message: error?.message || 'Unknown error' });
+    } catch (e) {
+      client.emit('error', { message: e?.message });
     }
   }
 
-  @SubscribeMessage('typing')
-  async handleTyping(
-    @MessageBody() data: { channelId: string; isTyping: boolean },
+  // ─── Typing indicator ────────────────────────────────────────────────────
+
+  @SubscribeMessage('typing:start')
+  handleTypingStart(
+    @MessageBody() data: { channelId: string },
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
-    if (!client.user) {
-      return;
-    }
-
-    // Broadcast typing status to channel (except sender)
-    client.to(`channel_${data.channelId}`).emit('typing', {
+    if (!client.user) return;
+    client.to(`channel:${data.channelId}`).emit('typing', {
       channelId: data.channelId,
       userId: client.user.id,
       username: client.user.username,
-      isTyping: data.isTyping,
+      isTyping: true,
     });
   }
 
-  @SubscribeMessage('signal')
-  async handleSignal(
-    @MessageBody() data: { to: string; data: any },
+  @SubscribeMessage('typing:stop')
+  handleTypingStop(
+    @MessageBody() data: { channelId: string },
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
-    if (!client.user) {
-      client.emit('error', { message: 'Not authenticated' });
-      return;
-    }
-
-    // Forward signaling data to target user
-    this.server.to(`user_${data.to}`).emit('signal', {
-      from: client.user.id,
-      data: data.data,
+    if (!client.user) return;
+    client.to(`channel:${data.channelId}`).emit('typing', {
+      channelId: data.channelId,
+      userId: client.user.id,
+      username: client.user.username,
+      isTyping: false,
     });
   }
 
-  @SubscribeMessage('webrtc_offer')
-  async handleWebRTCOffer(
-    @MessageBody() data: { to: string; offer: RTCSessionDescriptionInit },
+  // ─── Guild presence ───────────────────────────────────────────────────────
+
+  @SubscribeMessage('guild:join')
+  async handleGuildJoin(
+    @MessageBody() data: { guildId: string },
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
-    if (!client.user) {
-      client.emit('error', { message: 'Not authenticated' });
-      return;
-    }
+    if (!client.user) return;
+    await client.join(`guild:${data.guildId}`);
+  }
 
-    this.server.to(`user_${data.to}`).emit('webrtc_offer', {
-      from: client.user.id,
-      offer: data.offer,
+  @SubscribeMessage('guild:leave')
+  async handleGuildLeave(
+    @MessageBody() data: { guildId: string },
+    @ConnectedSocket() client: AuthenticatedSocket,
+  ) {
+    if (!client.user) return;
+    await client.leave(`guild:${data.guildId}`);
+  }
+
+  // ─── Voice presence (только присутствие, аудио идёт через LiveKit) ───────
+
+  @SubscribeMessage('voice:joined')
+  handleVoiceJoined(
+    @MessageBody() data: { channelId: string },
+    @ConnectedSocket() client: AuthenticatedSocket,
+  ) {
+    if (!client.user) return;
+    this.server.to(`channel:${data.channelId}`).emit('voice:participant_joined', {
+      channelId: data.channelId,
+      user: { id: client.user.id, username: client.user.username, avatar: client.user.avatar },
     });
   }
 
-  @SubscribeMessage('webrtc_answer')
-  async handleWebRTCAnswer(
-    @MessageBody() data: { to: string; answer: RTCSessionDescriptionInit },
+  @SubscribeMessage('voice:left')
+  handleVoiceLeft(
+    @MessageBody() data: { channelId: string },
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
-    if (!client.user) {
-      client.emit('error', { message: 'Not authenticated' });
-      return;
-    }
-
-    this.server.to(`user_${data.to}`).emit('webrtc_answer', {
-      from: client.user.id,
-      answer: data.answer,
-    });
-  }
-
-  @SubscribeMessage('webrtc_ice')
-  async handleWebRTCIce(
-    @MessageBody() data: { to: string; candidate: RTCIceCandidateInit },
-    @ConnectedSocket() client: AuthenticatedSocket,
-  ) {
-    if (!client.user) {
-      client.emit('error', { message: 'Not authenticated' });
-      return;
-    }
-
-    this.server.to(`user_${data.to}`).emit('webrtc_ice', {
-      from: client.user.id,
-      candidate: data.candidate,
+    if (!client.user) return;
+    this.server.to(`channel:${data.channelId}`).emit('voice:participant_left', {
+      channelId: data.channelId,
+      userId: client.user.id,
     });
   }
 }
+
