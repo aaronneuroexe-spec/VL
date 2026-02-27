@@ -97,6 +97,14 @@ export class WebsocketGateway
         }
       }
 
+      // Fallback: support token passed via query string during handshake (e.g., ?token=...)
+      if (!token && client.handshake.query) {
+        const q = client.handshake.query as any;
+        if (q.token && typeof q.token === 'string') {
+          token = q.token;
+        }
+      }
+
       if (!token) {
         client.disconnect();
         return;
