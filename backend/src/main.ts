@@ -2,22 +2,31 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
-import helmet from 'helmet';
-import compression from 'compression';
+import * as compression from 'compression';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
 
-  // Security middleware
-  app.use(helmet());
+  // Ensure required env vars in production
+  const nodeEnv = configService.get<string>('NODE_ENV', 'development');
+  if (nodeEnv === 'production') {
+    const required = ['JWT_SECRET', 'DATABASE_URL', 'REDIS_URL'];
+    const missing = required.filter((k) => !configService.get(k));
+    if (missing.length) {
+      console.error(`Missing required env vars in production: ${missing.join(', ')}`);
+      process.exit(1);
+    }
+  }
+
   app.use(compression());
 
   // CORS configuration
   app.enableCors({
     origin: configService.get('FRONTEND_URL', 'http://localhost:3000'),
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   });
 
   // Global validation pipe
