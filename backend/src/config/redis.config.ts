@@ -35,7 +35,8 @@ import Redis from 'ioredis';
       inject: [ConfigService],
     }),
   ],
-  exports: [RedisModule],
+  providers: [RedisMonitor],
+  exports: [RedisModule, RedisMonitor],
 })
 export class RedisConfig {}
 

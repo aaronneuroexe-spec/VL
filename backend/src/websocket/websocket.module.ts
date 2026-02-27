@@ -9,7 +9,7 @@ import { RedisMonitor } from '../config/redis.config';
 
 @Module({
   imports: [AuthModule, UsersModule, ChannelsModule, MessagesModule],
-  providers: [WebsocketGateway, WebsocketService, RedisMonitor],
+  providers: [WebsocketGateway, WebsocketService],
   exports: [WebsocketService],
 })
 export class WebsocketModule {}
