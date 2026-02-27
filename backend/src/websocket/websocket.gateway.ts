@@ -84,9 +84,18 @@ export class WebsocketGateway
 
   async handleConnection(client: AuthenticatedSocket) {
     try {
-      const token =
-        client.handshake.auth?.token ||
-        client.handshake.headers.authorization?.replace('Bearer ', '');
+      // Extract token from auth payload or Authorization header (supporting "Bearer <token>" case-insensitive)
+      let token = client.handshake.auth?.token;
+      const authHeader = client.handshake.headers.authorization as string | undefined;
+
+      if (!token && authHeader) {
+        const parts = authHeader.split(' ');
+        if (parts.length === 2 && /^Bearer$/i.test(parts[0])) {
+          token = parts[1];
+        } else {
+          token = authHeader;
+        }
+      }
 
       if (!token) {
         client.disconnect();
@@ -101,13 +110,19 @@ export class WebsocketGateway
         return;
       }
 
+      // Attach found user both to `client.user` (legacy in this codebase) and `client.data.user` (socket.io standard)
       client.user = user;
+      try {
+        (client as any).data = (client as any).data || {};
+        (client as any).data.user = user;
+      } catch {}
       await this.usersService.updateStatus(user.id, 'online');
       await client.join(`user:${user.id}`);
 
       this.server.emit('presence', { userId: user.id, status: 'online' });
       this.logger.log(`${user.username} connected`);
-    } catch {
+    } catch (e) {
+      this.logger.warn(`WebSocket auth failed: ${e?.message ?? e}`);
       client.disconnect();
     }
   }
