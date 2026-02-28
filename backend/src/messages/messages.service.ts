@@ -4,12 +4,14 @@ import { Repository } from 'typeorm';
 import { Message } from './entities/message.entity';
 import { User } from '../users/entities/user.entity';
 import { Channel } from '../channels/entities/channel.entity';
+import { ChannelsService } from '../channels/channels.service';
 
 @Injectable()
 export class MessagesService {
   constructor(
     @InjectRepository(Message)
     private messagesRepository: Repository<Message>,
+    private channelsService: ChannelsService,
   ) {}
 
   async create(createMessageDto: Partial<Message>, user: User, channelId: string): Promise<Message> {
@@ -23,6 +25,11 @@ export class MessagesService {
   }
 
   async findAll(channelId: string, user: User, limit: number = 50, offset: number = 0): Promise<Message[]> {
+    // Authorization: ensure user has access to channel
+    const channel = await this.channelsService.findOne(channelId, user);
+    if (channel.isPrivate && (!user || channel.createdById !== user.id)) {
+      throw new ForbiddenException('Access denied to channel messages');
+    }
     return this.messagesRepository.find({
       where: { 
         channelId,

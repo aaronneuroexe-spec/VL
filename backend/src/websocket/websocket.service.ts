@@ -118,4 +118,16 @@ export class WebsocketService {
       // swallow
     }
   }
+
+  async removeChannelMemberFromAll(userId: string): Promise<void> {
+    try {
+      const pattern = `channel:*:members`;
+      const keys = await this.redis.keys(pattern);
+      for (const key of keys) {
+        await this.redis.srem(key, userId);
+      }
+    } catch (e) {
+      // swallow
+    }
+  }
 }

@@ -85,7 +85,7 @@ export class LiveKitService {
    * Имя whisper-комнаты — живёт 10 минут, удаляется после.
    */
   whisperRoomName(fromUserId: string): string {
-    return `whisper:${fromUserId}:${Date.now()}`;
+    return `whisper:${fromUserId}:${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
   }
 
   async getParticipants(roomName: string) {

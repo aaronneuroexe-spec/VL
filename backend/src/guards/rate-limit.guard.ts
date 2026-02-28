@@ -60,16 +60,17 @@ export class CustomThrottlerGuard extends ThrottlerGuard {
   }
 
   private async isBlacklisted(ip: string): Promise<boolean> {
-    const blacklistedIPs = ['192.168.1.100'];
-    return blacklistedIPs.includes(ip);
+    // Read blacklist from environment or external store in the future
+    const list = process.env.RATE_LIMIT_BLACKLIST ? process.env.RATE_LIMIT_BLACKLIST.split(',') : [];
+    return list.includes(ip);
   }
 
   private async getAdjustedLimit(
     ip: string,
     defaultLimit: number,
   ): Promise<number> {
-    const suspiciousIPs = ['192.168.1.101'];
-    if (suspiciousIPs.includes(ip)) {
+    const suspicious = process.env.RATE_LIMIT_SUSPICIOUS ? process.env.RATE_LIMIT_SUSPICIOUS.split(',') : [];
+    if (suspicious.includes(ip)) {
       return Math.floor(defaultLimit * 0.5);
     }
     return defaultLimit;

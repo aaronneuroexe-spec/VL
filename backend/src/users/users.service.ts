@@ -26,14 +26,17 @@ export class UsersService {
     if (!user) {
       throw new NotFoundException('User not found');
     }
-    return user;
+    // Do not expose password
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { password, ...rest } = user as any;
+    return rest as User;
   }
 
-  async findByUsername(username: string): Promise<User> {
+  async findByUsername(username: string): Promise<User | null> {
     return this.usersRepository.findOne({ where: { username } });
   }
 
-  async findByEmail(email: string): Promise<User> {
+  async findByEmail(email: string): Promise<User | null> {
     return this.usersRepository.findOne({ where: { email } });
   }
 

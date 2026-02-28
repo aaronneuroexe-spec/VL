@@ -209,9 +209,11 @@ export class GuildsService {
     }
 
     // Получаем роль "Участник"
-    const memberRole = await this.rolesRepo.findOne({
-      where: { guildId: guild.id, name: 'Участник' },
-    });
+    // Получаем роль член по минимальной позиции (default role)
+    const memberRole = await this.rolesRepo.createQueryBuilder('r')
+      .where('r.guildId = :guildId', { guildId: guild.id })
+      .orderBy('r.position', 'ASC')
+      .getOne();
 
     const status = guild.requiresApproval ? MemberStatus.PENDING : MemberStatus.ACTIVE;
     const member = this.membersRepo.create({ userId: user.id, guildId: guild.id, status });
@@ -342,12 +344,12 @@ export class GuildsService {
   }
 
   async getChannels(guildId: string, user: User): Promise<Channel[]> {
+    // Ensure membership
     await this.getMemberOrThrow(guildId, user.id);
-    return this.channelsRepo.find({
-      where: { guildId },
-      relations: ['category'],
-      order: { position: 'ASC' },
-    });
+
+    // Return channels grouped by categories to match frontend expectation
+    const channels = await this.channelsRepo.find({ where: { guildId }, relations: ['category'], order: { position: 'ASC' } });
+    return channels;
   }
 
   // ─── Приватные хелперы ────────────────────────────────────────────────────
@@ -362,10 +364,18 @@ export class GuildsService {
   }
 
   private async requirePermission(guildId: string, userId: string, permission: Permission): Promise<void> {
-    // Владелец всегда имеет все права
-    const guild = await this.guildsRepo.findOne({ where: { id: guildId } });
-    if (guild?.ownerId === userId) return;
+    // Single query: check owner or member permissions
+    const result = await this.guildsRepo.createQueryBuilder('g')
+      .leftJoinAndSelect('g.members', 'm', 'm.userId = :userId', { userId })
+      .leftJoinAndSelect('m.roles', 'r')
+      .where('g.id = :guildId', { guildId })
+      .select(['g.ownerId', 'm.id'])
+      .getRawOne();
 
+    if (!result) throw new NotFoundException('Guild not found');
+    if (result.g_ownerId === userId) return;
+
+    // fallback to member permission check
     const member = await this.getMemberOrThrow(guildId, userId);
     if (!member.hasPermission(permission)) {
       throw new ForbiddenException('Insufficient permissions');

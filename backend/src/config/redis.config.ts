@@ -3,6 +3,22 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { RedisModule, InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
 
+@Injectable()
+export class RedisMonitor {
+  private readonly logger = new Logger(RedisMonitor.name);
+
+  constructor(@InjectRedis() private readonly redis: Redis) {
+    try {
+      this.redis.on('connect', () => this.logger.log('Redis client connecting'));
+      this.redis.on('ready', () => this.logger.log('Redis client ready'));
+      this.redis.on('error', (err: Error) => this.logger.error('Redis error', err));
+      this.redis.on('close', () => this.logger.warn('Redis connection closed'));
+    } catch (e) {
+      this.logger.error('Failed to attach Redis event listeners', e as any);
+    }
+  }
+}
+
 @Global()
 @Module({
   imports: [
@@ -11,7 +27,6 @@ import Redis from 'ioredis';
       useFactory: (configService: ConfigService) => {
         const redisUrl = configService.get<string>('REDIS_URL', 'redis://localhost:6379');
         try {
-          // Parse Redis URL
           const url = new URL(redisUrl);
           return {
             type: 'single',
@@ -22,7 +37,6 @@ import Redis from 'ioredis';
             },
           };
         } catch {
-          // Fallback if URL parsing fails
           return {
             type: 'single',
             options: {
@@ -39,19 +53,3 @@ import Redis from 'ioredis';
   exports: [RedisModule, RedisMonitor],
 })
 export class RedisConfig {}
-
-@Injectable()
-export class RedisMonitor {
-  private readonly logger = new Logger(RedisMonitor.name);
-
-  constructor(@InjectRedis() private readonly redis: Redis) {
-    try {
-      this.redis.on('connect', () => this.logger.log('Redis client connecting'));
-      this.redis.on('ready', () => this.logger.log('Redis client ready'));
-      this.redis.on('error', (err: Error) => this.logger.error('Redis error', err));
-      this.redis.on('close', () => this.logger.warn('Redis connection closed'));
-    } catch (e) {
-      this.logger.error('Failed to attach Redis event listeners', e as any);
-    }
-  }
-}

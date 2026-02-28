@@ -47,7 +47,7 @@ export class ChannelsService {
   async findOne(id: string, user?: User): Promise<Channel> {
     const channel = await this.channelsRepository.findOne({
       where: { id },
-      relations: ['createdBy', 'messages'],
+      relations: ['createdBy'],
     });
 
     if (!channel) {

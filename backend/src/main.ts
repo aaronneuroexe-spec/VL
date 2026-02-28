@@ -4,6 +4,7 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import * as compression from 'compression';
 import { AppModule } from './app.module';
+import { SocketIoAdapter } from './websocket/socket-io.adapter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -56,6 +57,10 @@ async function bootstrap() {
 
   const port = configService.get('PORT', 4000);
   const host = configService.get('APP_HOST', '0.0.0.0');
+
+  // Use SocketIoAdapter with CORS from config
+  const frontendUrl = configService.get<string>('FRONTEND_URL');
+  app.useWebSocketAdapter(new SocketIoAdapter(app, frontendUrl));
   
   await app.listen(port, host);
   

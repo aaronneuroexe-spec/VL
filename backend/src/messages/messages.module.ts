@@ -9,8 +9,8 @@ import { ChannelsModule } from '../channels/channels.module';
 @Module({
   imports: [
     TypeOrmModule.forFeature([Message]),
-    UsersModule,
-    ChannelsModule,
+    UsersModule, // Importing UsersModule for user management
+    ChannelsModule, // Importing ChannelsModule for channel management
   ],
   controllers: [MessagesController],
   providers: [MessagesService],

@@ -140,6 +140,11 @@ export class WebsocketGateway
       await this.usersService.updateStatus(client.user.id, 'offline');
       this.server.emit('presence', { userId: client.user.id, status: 'offline' });
       this.logger.log(`${client.user.username} disconnected`);
+      try {
+        await this.websocketService.removeChannelMemberFromAll(client.user.id);
+      } catch (e) {
+        this.logger.warn('Failed to remove user from all Redis channel member sets on disconnect', e as any);
+      }
     }
   }
 
@@ -155,6 +160,12 @@ export class WebsocketGateway
     try {
       const channel = await this.channelsService.findOne(data.channelId, client.user);
       await client.join(`channel:${data.channelId}`);
+      // Add member to Redis-backed members set
+      try {
+        await this.websocketService.addChannelMember(data.channelId, client.user.id);
+      } catch (e) {
+        this.logger.warn('Failed to add channel member to Redis', e as any);
+      }
 
       const members = await this.websocketService.getChannelMembers(data.channelId);
       const messages = await this.messagesService.findAll(data.channelId, client.user, 50);
@@ -181,6 +192,11 @@ export class WebsocketGateway
   ) {
     if (!client.user) return;
     await client.leave(`channel:${data.channelId}`);
+    try {
+      await this.websocketService.removeChannelMember(data.channelId, client.user.id);
+    } catch (e) {
+      this.logger.warn('Failed to remove channel member from Redis', e as any);
+    }
     this.server.to(`channel:${data.channelId}`).emit('channel:member_left', {
       channelId: data.channelId,
       userId: client.user.id,

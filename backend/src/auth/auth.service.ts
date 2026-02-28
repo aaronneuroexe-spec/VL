@@ -196,6 +196,12 @@ export class AuthService {
   // ─── Login по инвайту ────────────────────────────────────────────────────
 
   async login(loginDto: LoginDto) {
+    // If login without inviteToken, email or password - do not auto-create user.
+    // Require either invite token or magic link flow for auto account creation.
+    if (!loginDto.inviteToken && !loginDto.email) {
+      // If username + password login flow is required, this endpoint should be extended.
+      throw new UnauthorizedException('Invalid login flow');
+    }
     if (loginDto.inviteToken) {
       let raw: string | null = null;
       try {
@@ -224,21 +230,21 @@ export class AuthService {
       }
     }
 
-    let user = await this.usersRepository.findOne({
-      where: { username: loginDto.username },
-    });
-
-    if (!user) {
-      user = this.usersRepository.create({
-        username: loginDto.username ?? `user_${Date.now()}`,
-        email: loginDto.email ?? null,
-        role: 'member',
-        status: 'online',
-      });
-      await this.usersRepository.save(user);
+    // Find by email if provided, else by username
+    let user = null;
+    if (loginDto.email) {
+      user = await this.usersService.findByEmail(loginDto.email).catch(() => null);
+    }
+    if (!user && loginDto.username) {
+      user = await this.usersRepository.findOne({ where: { username: loginDto.username } });
     }
 
-    return this.signUser(user);
+    if (!user) {
+      // If invite flow provided we should have created the user earlier via invite acceptance
+      throw new UnauthorizedException('User not found');
+    }
+
+    return this.signUser(user as User);
   }
 
   // ─── Валидация пароля (для passport-local) ───────────────────────────────
