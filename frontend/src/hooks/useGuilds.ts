@@ -85,7 +85,20 @@ export function useGuilds() {
 
   const selectChannel = useCallback((channel: Channel) => {
     setCurrentChannel(channel);
-    wsService.joinChannel(channel.id);
+    // Ensure socket is connected before emitting; if not connected, buffer or retry
+    if (wsService.isConnected()) {
+      wsService.joinChannel(channel.id);
+    } else {
+      // Try to reconnect then join
+      const tryJoin = () => {
+        if (wsService.isConnected()) {
+          wsService.joinChannel(channel.id);
+        } else {
+          setTimeout(tryJoin, 500);
+        }
+      };
+      tryJoin();
+    }
   }, []);
 
   // ─── Покинуть гильдию ─────────────────────────────────────────────────────

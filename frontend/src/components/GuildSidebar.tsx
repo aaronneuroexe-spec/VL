@@ -140,10 +140,9 @@ export function GuildSidebar({ guild, currentChannelId, onChannelSelect }: Guild
       .catch(() => {});
   }, [guild.id]);
 
-  // Каналы без категории
-  const uncategorized = guild.categories?.flatMap(c => c.channels ?? [])
-    ? [] // все в категориях
-    : [];
+  // Каналы без категории — все каналы гильдии минус те, что в категориях
+  const channelsInCategories = guild.categories?.flatMap(c => c.channels ?? []) || [];
+  const uncategorized = guild.channels ? guild.channels.filter(ch => !channelsInCategories.find(cc => cc.id === ch.id)) : [];
 
   const handleCopyInvite = () => {
     if (guild.inviteCode) {

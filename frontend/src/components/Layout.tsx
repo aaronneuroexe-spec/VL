@@ -18,7 +18,7 @@ export function Layout() {
 
   useEffect(() => {
     loadGuilds();
-  }, []);
+  }, [loadGuilds]);
 
   const handleGuildSelect = async (guild: Guild) => {
     await selectGuild(guild.id);

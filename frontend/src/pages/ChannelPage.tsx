@@ -18,7 +18,7 @@ export function ChannelPage() {
       .find(ch => ch.id === channelId);
 
     if (channel) selectChannel(channel);
-  }, [channelId, currentGuild]);
+  }, [channelId, currentGuild, selectChannel]);
 
   // Layout сам покажет нужный канал через store
   return <Layout />;

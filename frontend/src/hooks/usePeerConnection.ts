@@ -38,6 +38,10 @@ export function usePeerConnection({ channelId, autoConnect = false }: UseVoiceOp
   useEffect(() => {
     livekitService.onParticipants(setParticipants);
     livekitService.onState(setConnectionState);
+    return () => {
+      livekitService.offParticipants && livekitService.offParticipants(setParticipants);
+      livekitService.offState && livekitService.offState(setConnectionState);
+    };
   }, []);
 
   const connect = useCallback(async () => {
@@ -84,7 +88,7 @@ export function usePeerConnection({ channelId, autoConnect = false }: UseVoiceOp
   useEffect(() => {
     if (autoConnect && channelId) connect();
     return () => { disconnect(); };
-  }, [autoConnect, channelId]);
+  }, [autoConnect, channelId, connect, disconnect]);
 
   return {
     participants,
@@ -100,5 +104,5 @@ export function usePeerConnection({ channelId, autoConnect = false }: UseVoiceOp
     toggleMute,
     toggleDeafen,
     toggleScreenShare,
-  } as any;
+  } as UseVoiceReturn;
 }

@@ -46,7 +46,8 @@ export function useWebSocket() {
     }
 
     return () => {
-      wsService.disconnect();
+      // Only remove listeners; do not forcibly disconnect here to avoid reconnect loop on unmount
+      // Actual disconnect should be handled by explicit call or when auth state changes.
     };
   }, [isAuthenticated, token, connect, disconnect]);
 
@@ -68,15 +69,11 @@ export function useWebSocket() {
       setConnecting(false);
     };
 
-    // Listen to WebSocket service events
-    window.addEventListener('websocket:connected', handleConnect);
-    window.addEventListener('websocket:disconnected', handleDisconnect);
-    window.addEventListener('websocket:error', handleError as EventListener);
+    // Listen to WebSocket service events via store updates; remove dead window listeners
+    // Keep this effect to derive state from store if needed
 
     return () => {
-      window.removeEventListener('websocket:connected', handleConnect);
-      window.removeEventListener('websocket:disconnected', handleDisconnect);
-      window.removeEventListener('websocket:error', handleError as EventListener);
+      // cleanup if using other event sources
     };
   }, [setConnected, setConnecting, setError, clearError]);
 

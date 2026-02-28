@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Send, Paperclip, Smile } from 'lucide-react';
+import { Smile } from 'lucide-react';
 import { Channel, Message } from '@/types';
 import { useMessageStore } from '@/store/messages';
 import { useAuth } from '@/hooks/useAuth';
@@ -96,7 +96,7 @@ export function ChatWindow({ channel }: ChatWindowProps) {
                   {index < channelTyping.size - 1 && ', '}
                 </span>
               ))}
-              {channelTyping.size === 1 ? ' is' : ' are'} typing...
+              {channelTyping.size === 1 ? ' набирает' : ' набирают'} сообщение...
             </span>
           </div>
         </div>

@@ -6,6 +6,7 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function formatDate(date: Date | string): string {
+  if (!date) return '';
   const d = new Date(date);
   const now = new Date();
   const diff = now.getTime() - d.getTime();
@@ -34,7 +35,7 @@ export function formatDate(date: Date | string): string {
   }
   
   // More than 7 days
-  return d.toLocaleDateString();
+  return d.toLocaleDateString('ru-RU');
 }
 
 export function formatTime(date: Date | string): string {
@@ -160,7 +161,7 @@ export function sanitizeHtml(html: string): string {
 }
 
 export function generateId(): string {
-  return Math.random().toString(36).substr(2, 9);
+  return Math.random().toString(36).substring(2, 11);
 }
 
 export function sleep(ms: number): Promise<void> {

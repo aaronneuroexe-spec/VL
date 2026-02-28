@@ -74,16 +74,16 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
 
   setTyping: (channelId, userId, isTyping) => set((state) => {
     const newTyping = { ...state.typing };
-    
-    if (!newTyping[channelId]) {
-      newTyping[channelId] = new Set();
-    }
-    
+
+    const existing = newTyping[channelId] ? new Set(newTyping[channelId]) : new Set<string>();
+
     if (isTyping) {
-      newTyping[channelId].add(userId);
+      existing.add(userId);
     } else {
-      newTyping[channelId].delete(userId);
+      existing.delete(userId);
     }
+
+    newTyping[channelId] = existing;
 
     return { typing: newTyping };
   }),
