@@ -343,13 +343,19 @@ export class GuildsService {
     return this.channelsRepo.save(channel);
   }
 
-  async getChannels(guildId: string, user: User): Promise<Channel[]> {
-    // Ensure membership
+  async getChannels(guildId: string, user: User) {
+    // Ensure membership and return categories with channels to match frontend
     await this.getMemberOrThrow(guildId, user.id);
+    const guild = await this.guildsRepo.findOne({
+      where: { id: guildId },
+      relations: ['categories', 'categories.channels'],
+    });
+    if (!guild) throw new NotFoundException('Guild not found');
 
-    // Return channels grouped by categories to match frontend expectation
-    const channels = await this.channelsRepo.find({ where: { guildId }, relations: ['category'], order: { position: 'ASC' } });
-    return channels;
+    guild.categories?.sort((a, b) => a.position - b.position);
+    guild.categories?.forEach(cat => cat.channels?.sort((a, b) => a.position - b.position));
+
+    return guild.categories || [];
   }
 
   // ─── Приватные хелперы ────────────────────────────────────────────────────

@@ -55,7 +55,7 @@ export class ChannelsService {
     }
 
     // Check if user has access to private channel
-    if (channel.isPrivate && user && channel.createdById !== user.id) {
+    if (channel.isPrivate && (!user || channel.createdById !== user.id)) {
       throw new ForbiddenException('Access denied to private channel');
     }
 
